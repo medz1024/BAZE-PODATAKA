@@ -1,0 +1,226 @@
+﻿create database Medzida9
+go
+use Medzida9
+go
+
+
+CREATE TABLE Proizvodi
+(
+	 ProizvodID INT NOT NULL IDENTITY(1,1) CONSTRAINT PK_ProizvodID PRIMARY KEY,
+	 Sifra NVARCHAR(10) NOT NULL,
+	 Naziv NVARCHAR(50) NOT NULL,
+	 Cijena DECIMAL (10,2)NOT NULL
+)
+GO
+
+CREATE TABLE Skladista
+(
+	 SkladisteID INT NOT NULL IDENTITY(1,1) CONSTRAINT PK_SkladisteID PRIMARY KEY,
+	 Naziv NVARCHAR (50) NOT NULL,
+	 Oznaka NVARCHAR (10) NOT NULL,
+	 Lokacija NVARCHAR (50) NOT NULL
+)
+GO
+
+CREATE TABLE SkladisteProizvoda
+(
+	ProizvodID INT NOT NULL CONSTRAINT FK_SkladisteProizvoda_ProizvodID FOREIGN KEY REFERENCES Proizvodi(ProizvodID),
+	SkladisteID INT NOT NULL CONSTRAINT FK_SkladisteProizvoda_SkladisteID FOREIGN KEY REFERENCES Skladista(SkladisteID),
+	CONSTRAINT PK_SkladisteProizvoda_ProizvodID_SkladisteID 
+	PRIMARY KEY(ProizvodID,SkladisteID),
+	Stanje DECIMAL (8,2)NOT NULL
+)
+GO
+
+
+INSERT INTO Skladista
+VALUES ('Mostarsko','MO','Mostar'),
+       ('Sarajevsko','SA','Sarajevo'),
+	   ('Zenicko','ZE','Zenica')
+GO
+
+INSERT INTO Proizvodi
+SELECT TOP 10 P.ProductNumber,P.Name,P.ListPrice
+FROM AdventureWorks2012.Production.Product AS P
+     INNER JOIN AdventureWorks2012.Production.ProductSubcategory AS PS 
+	 ON P.ProductSubcategoryID=PS.ProductSubcategoryID
+	 INNER JOIN AdventureWorks2012.Production.ProductCategory AS PC 
+	 ON PS.ProductCategoryID=PS.ProductCategoryID
+	 INNER JOIN AdventureWorks2012.Sales.SalesOrderDetail AS SOD 
+	 ON SOD.ProductID=P.ProductID
+WHERE PC.Name ='Bikes'
+ORDER BY SOD.OrderQty desc
+GO
+
+
+INSERT INTO SkladisteProizvoda
+SELECT ProizvodID,1,100 FROM Proizvodi
+GO
+
+INSERT INTO SkladisteProizvoda
+SELECT ProizvodID,2,100 FROM Proizvodi
+GO
+
+INSERT INTO SkladisteProizvoda
+SELECT ProizvodID,3,100 FROM Proizvodi
+GO
+
+select*from Skladista
+go
+
+select*from Proizvodi
+go
+
+select*from SkladisteProizvoda
+go
+
+
+create procedure proc_update_skladiste_proizvoda
+(
+	@ProizvodID INT,
+	@SkladisteID INT,
+	@Stanje decimal(8,2)
+)
+as
+begin
+update SkladisteProizvoda set Stanje=@Stanje
+WHERE @ProizvodID=ProizvodID AND @SkladisteID=SkladisteID
+end
+
+select*from SkladisteProizvoda
+where ProizvodID=1 and SkladisteID = 1
+
+exec proc_update_skladiste_proizvoda 1,1,200
+
+create nonclustered index ix_proizvodi
+on Proizvodi (Sifra, Naziv)
+include (Cijena)
+go
+
+SELECT Sifra,Naziv,Cijena
+FROM Proizvodi
+WHERE Naziv LIKE '[^A]%'
+GO
+
+alter index ix_proizvodi on Proizvodi
+disable 
+go
+
+create view view_proizvod_stanje
+as
+select p.Sifra as sifra,p.Naziv as 'naziv proizvoda',p.Cijena as cijena, 
+s.Oznaka as oznaka, s.Naziv as 'naziv skladista', s.Lokacija as 'lokacija skladista',
+ sp.Stanje as 'stanje na skladistu'
+from Proizvodi as p join SkladisteProizvoda as sp
+	on p.ProizvodID=sp.ProizvodID
+					join Skladista as s
+	on s.SkladisteID=sp.SkladisteID
+
+select*from view_proizvod_stanje
+go
+ 
+create procedure proc_view_pretraga_sifri
+(
+	@Sifra nvarchar(10)
+)
+as
+begin
+select sifra, [naziv proizvoda], cijena, [stanje na skladistu]  from view_proizvod_stanje
+where @Sifra=sifra
+end
+go
+
+exec proc_view_pretraga_sifri 'GL-F110-L'
+go
+ 
+
+create procedure proc_unos_proizvoda1
+(
+	@Sifra nvarchar(10),
+	@Naziv nvarchar(50),
+	@Cijena decimal(10,2)
+)
+as
+begin
+insert into Proizvodi 
+values (@Sifra, @Naziv, @Cijena) 
+DECLARE @ProizvodID INT
+	SET @ProizvodID=@@IDENTITY
+
+	INSERT INTO SkladisteProizvoda
+	SELECT @ProizvodID,SkladisteID,0 FROM Skladista
+end
+go
+
+exec proc_unos_proizvoda1 '1234', 'nazivvv', '100'
+go
+
+select*from Proizvodi
+where Sifra='1234'
+go
+select*from SkladisteProizvoda
+where ProizvodID=23
+GO
+
+
+create procedure proc_delete_proizvod
+(
+	@Sifra nvarchar (10)
+)
+as
+begin
+DELETE 
+	 FROM SkladisteProizvoda
+	 WHERE ProizvodID IN (SELECT ProizvodID FROM Proizvodi WHERE Sifra=@Sifra)
+delete from Proizvodi
+where @Sifra=Sifra
+
+end
+go
+
+exec proc_delete_proizvod '1234'
+go
+
+select*from Proizvodi
+where Sifra='1234'
+go
+
+create procedure proc_pretraga
+(
+	@Sifra nvarchar(10) = null,
+	@Oznaka nvarchar(10) = null,
+	@Lokacija nvarchar (10) = null
+)
+as
+begin
+select*from view_proizvod_stanje
+where (@Sifra=sifra or @Sifra IS NULL) AND
+	(@Oznaka = oznaka or @Oznaka is null) and
+	(@Lokacija = [lokacija skladista] or @Lokacija is null)
+end
+go
+
+exec proc_pretraga
+go
+
+exec proc_pretraga 'GL-F110-L'
+go
+
+exec proc_pretraga 'GL-F110-L', 'MO'
+GO
+
+exec proc_pretraga @Sifra='GL-F110-L',@Lokacija= 'Mostar'
+GO
+
+exec proc_pretraga 'GL-F110-L', 'MO', 'Mostar'
+GO
+
+
+backup database Medzida9 to
+disk 'C:\Program Files\Microsoft SQL Server\MSSQL12.MSSQLSERVER\MSSQL\Backup\Medzida9_full.bak'
+go
+
+backup database Medzida9 to
+disk 'C:\Program Files\Microsoft SQL Server\MSSQL12.MSSQLSERVER\MSSQL\Backup\Medzida9_diff.bak'
+with differential
+go

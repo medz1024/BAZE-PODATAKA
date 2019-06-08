@@ -1,0 +1,191 @@
+create database Medzida8
+go
+use Medzida8
+go
+
+CREATE TABLE Kandidati
+(KandidatiID int NOT NULL IDENTITY (1,1) CONSTRAINT PK_KandidatiID PRIMARY KEY,
+Ime nvarchar(30) NOT NULL,
+Prezime nvarchar(30) NOT NULL,
+JMBG nvarchar(13) NOT NULL CONSTRAINT JMBG_UQ UNIQUE,
+DatumRodjenja date NOT NULL,
+MjestoRodjenja nvarchar(20),
+Telefon nvarchar(20),
+Email nvarchar(50) CONSTRAINT Email_UQ UNIQUE
+)
+go
+CREATE TABLE Testovi
+(TestoviID int NOT NULL identity(1,1) CONSTRAINT PK_TestoviID PRIMARY KEY,
+Datum datetime NOT NULL,
+Naziv nvarchar(50) NOT NULL, 
+Oznaka nvarchar(10) NOT NULL CONSTRAINT Oznaka_UQ UNIQUE,
+Oblast nvarchar(50) NOT NULL,
+MaxBrojBodova int NOT NULL,
+Opis nvarchar(250)
+)
+go
+create table RezultatiTesta
+(
+Polozio bit not null,
+OsvojeniBodovi decimal not null,
+Napomena nvarchar(max),
+TestoviID int constraint FK_TestoviID foreign key REFERENCES Testovi(TestoviID),
+KandidatiID int constraint FK_KandidatiID foreign key references Kandidati(KandidatiID),
+primary key(TestoviID,KandidatiID)
+)
+go
+
+INSERT INTO Kandidati (Ime, Prezime, JMBG, DatumRodjenja, MjestoRodjenja, Telefon, Email)
+SELECT TOP 10 P.FirstName, P.LastName, REPLACE(RIGHT(C.rowguid,13),'-','0'), C.ModifiedDate, A.City, 
+	   PP.PhoneNumber, EA.EmailAddress
+FROM AdventureWorks2012.Person.Person AS P JOIN AdventureWorks2012.Sales.Customer AS C
+	ON P.BusinessEntityID = C.PersonID INNER JOIN AdventureWorks2012.Person.StateProvince AS S
+	ON C.TerritoryID = S.TerritoryID INNER JOIN AdventureWorks2012.Person.Address AS A	
+	ON A.StateProvinceID = S.StateProvinceID INNER JOIN AdventureWorks2012.Person.PersonPhone AS PP
+	ON P.BusinessEntityID = PP.BusinessEntityID INNER JOIN AdventureWorks2012.Person.EmailAddress AS EA
+	ON EA.BusinessEntityID = P.BusinessEntityID
+WHERE A.City IS NOT NULL 
+order by newid()
+go
+
+select*from Kandidati
+go
+
+
+INSERT INTO Testovi(Datum,Naziv,Oznaka,Oblast,MaxBrojBodova)
+values('10.05.2016','Baze integralni','bp','it',100),
+('11.05.2016','Engleski integralni','eg','it',100),
+('12.05.2016','web parcijalni','web','it',100)
+go
+
+create procedure usp_RezultatiTesta_Insert
+(
+	@Polozio bit,
+	@OsvojeniBodovi decimal (18,0),
+	@Napomena nvarchar (max),
+	@TestoviID INT,
+	@KandidatiID INT
+)
+as
+begin
+INSERT INTO RezultatiTesta (Polozio,OsvojeniBodovi,Napomena,TestoviID,KandidatiID)
+values (@Polozio,@OsvojeniBodovi,@Napomena,@TestoviID,@KandidatiID)
+end
+
+EXECUTE usp_RezultatiTesta_Insert 1,92,'USPJESNO',1,1
+GO
+EXECUTE usp_RezultatiTesta_Insert 0,2,'NEUSPJESNO',2,10
+GO
+EXECUTE usp_RezultatiTesta_Insert 1,92,'USPJESNO',2,2
+GO
+EXECUTE usp_RezultatiTesta_Insert 1,92,'USPJESNO',1,9
+GO
+EXECUTE usp_RezultatiTesta_Insert 1,55,'USPJESNO',3,3
+GO
+EXECUTE usp_RezultatiTesta_Insert 1,66,'USPJESNO',1,4
+GO
+EXECUTE usp_RezultatiTesta_Insert 1,88,'USPJESNO',2,5
+GO
+EXECUTE usp_RezultatiTesta_Insert 1,77,'USPJESNO',3,6
+GO
+EXECUTE usp_RezultatiTesta_Insert 1,99,'USPJESNO',1,7
+GO
+EXECUTE usp_RezultatiTesta_Insert 1,74,'USPJESNO',2,8
+GO
+
+SELECT*FROM RezultatiTesta
+GO
+
+
+create view view_Rezultati_Testiranja4
+as
+select k.Ime+' '+k.Prezime as 'Ime i Pprezime',
+		k.JMBG as jmbg, k.Telefon as telefon, k.Email as mejl, 
+		t.Datum as datum, t.Naziv as naziv,t.Oznaka as oznaka,t.Oblast as oblast, t.MaxBrojBodova as maxbodovi,
+		re.Polozio as polozio,re.OsvojeniBodovi as osvojenibodovi,
+		(t.MaxBrojBodova/re.OsvojeniBodovi)*100 as Procenat
+from Kandidati as k join RezultatiTesta as re on k.KandidatiID=re.KandidatiID
+					join Testovi as t on t.TestoviID=re.KandidatiID
+go
+
+select*from view_Rezultati_Testiranja4
+go
+
+ 
+create procedure usp_RezultatiTesta_SelectByOznaka
+(
+	@OznakaTesta nvarchar(50) = null,
+	@Polozio bit = null
+)
+as
+begin
+select*from view_Rezultati_Testiranja4
+where (oznaka=@OznakaTesta + '%'or @OznakaTesta is null) and 
+	(polozio=@Polozio or @Polozio is null)
+end
+go
+
+exec usp_RezultatiTesta_SelectByOznaka 'bp',1
+
+select*from view_Rezultati_Testiranja4
+ 
+
+create procedure usp_RezultatiTesta_Update2
+(
+	@Polozio bit,
+	@OsvojeniBodovi decimal (18,0),
+	@Napomena nvarchar (max),
+	@TestoviID int,
+	@KandidatiID INT
+)
+AS
+BEGIN
+update RezultatiTesta set Polozio=@Polozio, OsvojeniBodovi=@OsvojeniBodovi, Napomena=@Napomena, 
+TestoviID=@TestoviID, KandidatiID=@KandidatiID
+WHERE TestoviID=@TestoviID and KandidatiID=@KandidatiID
+END
+GO
+
+
+SELECT*FROM RezultatiTesta
+where TestoviID=1 AND KandidatiID=1
+go
+
+exec usp_RezultatiTesta_Update2 0,45,'NEUSPJESNO',1,1
+
+ 
+create procedure usp_Testovi_Delete
+(
+	@TestoviID int
+) 
+as
+begin
+delete from RezultatiTesta 
+where TestoviID=@TestoviID
+delete from Testovi
+where TestoviID=@TestoviID
+END
+GO
+ 
+exec usp_Testovi_Delete 3
+go
+
+ SELECT*FROM Testovi
+ go
+ 
+ select*from RezultatiTesta
+ go 
+
+create trigger tr_Brisanje_Rezultata
+on RezultatiTesta instead of delete
+as 
+print 'Zabnranjeno brisanje'
+rollback
+  
+  delete RezultatiTesta
+  where TestoviID=2
+  go
+
+backup database to
+DISK='D:\DBMS\Backup\Medzida8_full.bak'
+go

@@ -1,0 +1,126 @@
+﻿create database Medzida2
+go
+
+use Medzida2
+go
+
+
+CREATE TABLE Gosti
+(
+GostID int  identity(1,1) constraint pk_gosti primary key,
+Titula nvarchar(10),
+Prezime nvarchar(50) not null,
+Ime nvarchar(50) not null,
+Email nvarchar(100) constraint uq_email unique not null,
+BrTel nvarchar(20) not null,
+BrKredKart nvarchar(50),
+KorisnickoIme nvarchar(100) not null,
+Lozinka nvarchar(12) not null 
+)
+
+CREATE TABLE Sobe
+(
+SobaID INT  identity(1,1) constraint pk_sobe PRIMARY KEY,
+BrojSobe int not null,
+TipSobe nvarchar(20) not null
+)
+
+CREATE TABLE Rezervacije
+(
+RezervacijaID int primary key identity(1,1),
+GostID int constraint fk_gostirez foreign key references Gosti(GostID) not null,
+SobaID int constraint fk_soberez foreign key references Sobe(SobaID) not null,
+DatumRezervacije datetime not null,
+DatumDolaska datetime,
+DatumOdlaska datetime
+)
+
+
+
+INSERT INTO Gosti
+VALUES ('gdjica','Selimovic','Medzida','medzida.mejl@edu.fit.ba','0600000','21365479','mecka','12345')
+
+INSERT INTO Gosti(Titula,Prezime,Ime,Email,BrTel,BrKredKart,KorisnickoIme,Lozinka)
+	SELECT P.Title AS Titula,
+					P.LastName AS Prezime,
+					P.FirstName AS Ime,
+					EM.EmailAddress AS Email,
+					PH.PhoneNumber AS BrTel,
+					CC.CardNumber AS BrKredKart,
+					P.FirstName+'.'+P.LastName AS KorisnickoIme,
+					SUBSTRING (REVERSE (P.LastName),2,4)+
+					SUBSTRING (REVERSE (P.FirstName),2,2) AS Lozinka
+
+	FROM AdventureWorks2012.Person.Person as P JOIN AdventureWorks2012.Person.EmailAddress AS EM
+	ON P.BusinessEntityID=EM.BusinessEntityID JOIN AdventureWorks2012.Person.PersonPhone AS PH
+	ON PH.BusinessEntityID=P.BusinessEntityID LEFT JOIN AdventureWorks2012.Sales.PersonCreditCard AS PCC
+	ON PCC.BusinessEntityID=P.BusinessEntityID LEFT JOIN AdventureWorks2012.Sales.CreditCard AS CC
+	ON PCC.CreditCardID=CC.CreditCardID
+
+
+USE Medzida2
+
+INSERT INTO Sobe
+VALUES (1,'Jednokrevetna'),(2,'Dvokrevetna'),(3,'Trokrevetna')
+
+
+INSERT INTO Rezervacije
+SELECT TOP 5000 GostID, 1, GETDATE(), NULL,NULL	
+FROM Gosti
+ORDER BY Prezime
+
+select*from Rezervacije
+
+DELETE FROM Gosti
+WHERE GostID NOT IN (SELECT GostID FROM Rezervacije)
+
+select*from Gosti
+
+
+SELECT Email FROM Gosti
+
+UPDATE Gosti 
+SET    Email = REPLACE (Email, RIGHT (Email, 19),'edu.fit.ba')
+
+SELECT Email FROM Gosti
+
+
+alter table Rezervacije
+add Ukupno decimal(6,2) 
+
+select BrKredKart from Gosti
+
+DECLARE @BrKredKart NVARCHAR (50)
+SET     @BrKredKart = (SELECT TOP 1 CONVERT(bigint, BrKredKart)
+		   FROM Gosti
+		   WHERE BrKredKart IS NOT NULL
+		   ORDER BY 1 DESC)
+
+
+SELECT @BrKredKart
+
+SELECT SUM (SOH.TotalDue)
+FROM	AdventureWorks2012.Sales.CreditCard AS CC 
+	INNER JOIN 
+	AdventureWorks2012.Sales.SalesOrderHeader AS SOH
+	ON CC.CreditCardID = SOH.CreditCardID
+WHERE	CC.CardNumber = @BrKredKart
+
+
+   UPDATE Rezervacije
+SET DatumDolaska = GETDATE(),
+	DatumOdlaska = DATEADD(DAY, 5, GETDATE()),
+Ukupno = (SELECT SUM(SOH.TotalDue)
+	FROM	
+	AdventureWorks2012.Sales.CreditCard AS CC 
+	INNER JOIN
+	AdventureWorks2012.Sales.SalesOrderHeader AS SOH
+	ON CC.CreditCardID = SOH.CreditCardID
+	WHERE CC.CardNumber = @BrKredKart)
+WHERE GostID = (SELECT GostID
+	      FROM Gosti
+	      WHERE BrKredKart = @BrKredKart)
+
+
+SELECT * FROM Rezervacije
+WHERE Ukupno IS NOT NUll

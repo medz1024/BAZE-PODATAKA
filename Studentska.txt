@@ -1,0 +1,113 @@
+﻿CREATE DATABASE Medzida
+USE Medzida
+CREATE TABLE Studenti
+(
+StudentID int PRIMARY KEY IDENTITY(1,1),
+BrojDosjea NVARCHAR (10) CONSTRAINT UQ_BrojDosja UNIQUE NOT NULL,
+Ime nvarchar(35) NOT NULL,
+Prezime nvarchar(35) NOT NULL,
+GodinaStudija INT NOT NULL,
+NacinStudiranja nvarchar(10) default 'redovan' not null,
+Email nvarchar(50)
+)
+
+CREATE TABLE Predmeti
+(
+PredmetID int PRIMARY KEY IDENTITY(1,1),
+Naziv NVARCHAR (100) not null,
+Oznaka NVARCHAR (10) CONSTRAINT UQ_Oznaka UNIQUE NOT NULL
+)
+
+CREATE TABLE Ocjene
+(
+Ocjena INT NOT NULL,
+Bodovi DECIMAL(3,2) NOT NULL,
+DatumPolaganja DATETIME NOT NULL,
+StudentID int not null FOREIGN KEY REFERENCES Studenti(StudentID),
+PredmetID int not null FOREIGN KEY REFERENCES Predmeti(PredmetID)
+)
+
+INSERT INTO Predmeti
+VALUES	('Programiranje','PR'),
+		('Matematika','IM'),
+		('Baze Podataka','BP')
+
+SELECT * FROM Predmeti
+
+INSERT INTO Studenti
+SELECT TOP 10 AccountNumber AS BrojDosjea,
+			FirstName AS Ime,
+			LastName AS Pezime,
+			2 AS GodinaStudija,
+			'Redovan' AS NacinStudiranja,
+			EmailAddress AS Email
+FROM AdventureWorks2012.Sales.Customer AS C JOIN AdventureWorks2012.Person.Person AS P
+		ON C.PersonID=P.BusinessEntityID
+		JOIN AdventureWorks2012.Person.EmailAddress AS EA
+		ON P.BusinessEntityID=EA.BusinessEntityID
+
+SELECT * FROM Studenti
+drop procedure proc_UnosOcjena
+CREATE PROCEDURE proc_UnosOcjena
+@Ocjena int,
+@Bodovi decimal,
+@DatumPolaganja datetime,
+@StudentID int,
+@predmetID int
+AS
+BEGIN
+INSERT INTO Ocjene
+VALUES(@Ocjena,@Bodovi,@DatumPolaganja,@StudentID,@predmetID)
+END
+
+SET DATEFORMAT dmy
+
+EXEC proc_UnosOcjena 6,6,'1/8/17',1,1
+EXEC proc_UnosOcjena 7,7,'1/8/17',2,2
+EXEC proc_UnosOcjena 8,8,'1/8/17',5,3
+EXEC proc_UnosOcjena 9,9,'1/8/17',7,2
+EXEC proc_UnosOcjena 10,10,'1/8/17',3,1
+
+SELECT * FROM Ocjene
+
+use Medzida
+
+CREATE 	NONCLUSTERED INDEX IX_Person_LastName_FirstName
+	ON Person.Person (LastName, FirstName)
+	INCLUDE (Title);
+GO
+
+SELECT FirstName, LastName, Title
+FROM Person.Person
+WHERE LastName LIKE 'A%' AND Title = 'Ms.'
+
+ALTER INDEX IX_Person_LastName_FirstName ON Person.Person
+DISABLE;
+GO
+
+CREATE CLUSTERED INDEX CI_CreeditCrad_CreditCardID
+	ON Sales.CreditCard (CreditCardID)
+	GO
+
+
+CREATE NONCLUSTERED INDEX IX_CardNumber_EXPM_EXPY
+ON Sales.CreditCard (CardNumber)
+INCLUDE (ExpMonth, ExpYear)
+GO
+
+
+CREATE VIEW vw_CreditCard
+AS
+SELECT P.LastName, P.FirstName, CC.CardNumber, CC.CardType
+FROM [Sales].[CreditCard] AS CC JOIN Person.Person AS P 
+ON P.BusinessEntityID=CC.CreditCardID
+WHERE CC.CardType like 'Vista' and P.Title IS NULL
+
+BACKUP DATABASE Indeks TO
+DISK = 'C:\Program Files\Microsoft SQL Server\MSSQL14.MSSQLSERVER\MSSQL\Backup\IndeksFull.bak'
+GO
+
+BACKUP DATABASE Indeks TO
+DISK = 'C:\Program Files\Microsoft SQL Server\MSSQL14.MSSQLSERVER\MSSQL\Backup\IndeksDiff.bak'
+WITH DIFFERENTIAL
+GO
